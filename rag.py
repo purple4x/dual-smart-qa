@@ -3,10 +3,10 @@ RAG 知识库：切块 → 向量化 → 存入 ChromaDB → 检索 → 按文�
 """
 
 import hashlib
+import os
 import re
 from http import HTTPStatus
 
-import chromadb
 import dashscope
 from dashscope import TextEmbedding
 
@@ -18,6 +18,14 @@ CHUNK_OVERLAP = 80
 TOP_K = 3  # 每次检索最相关的 3 段
 EMBED_MODEL = "text-embedding-v2"
 EMBED_BATCH = 25  # 通义 Embedding 单次最多约 25 条
+
+
+def _import_chromadb():
+    """延迟导入，并关闭遥测，减少云端依赖冲突。"""
+    os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+    import chromadb
+
+    return chromadb
 
 
 def chunk_text(text: str) -> list[str]:
@@ -89,6 +97,7 @@ def index_document(text: str, filename: str) -> tuple[object, int]:
 
     embeddings = embed_texts(chunks)
 
+    chromadb = _import_chromadb()
     client = chromadb.Client()
     collection = client.create_collection(name=_collection_name(filename))
     collection.add(

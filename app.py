@@ -2,7 +2,6 @@ import streamlit as st
 
 from document_loader import load_document
 from llm import chat, is_api_key_configured
-from rag import index_document, rag_chat
 
 st.set_page_config(page_title="双模智能问答", page_icon="💬", layout="wide")
 
@@ -41,6 +40,8 @@ with st.sidebar:
                 with st.spinner("正在解析文档…"):
                     text = load_document(uploaded.name, uploaded.getvalue())
                 with st.spinner("正在切块并向量化，请稍候…"):
+                    from rag import index_document
+
                     collection, chunk_count = index_document(text, uploaded.name)
 
                 st.session_state.document_text = text
@@ -100,6 +101,8 @@ if prompt := st.chat_input("输入你的问题…"):
         with st.spinner("思考中…"):
             try:
                 if has_document and st.session_state.collection is not None:
+                    from rag import rag_chat
+
                     reply = rag_chat(st.session_state.messages, st.session_state.collection)
                 else:
                     reply = chat(st.session_state.messages)
