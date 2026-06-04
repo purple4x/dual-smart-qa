@@ -110,10 +110,37 @@ def index_document(text: str, filename: str) -> tuple[object, int]:
 
 def retrieve(collection, question: str, top_k: int = TOP_K) -> list[str]:
     """根据用户问题，检索最相关的文档片段。"""
+    count = collection.count()
+    if count == 0:
+        return []
+
+    # 文档片段很少时，每次带上全部内容，避免问法不同就检索偏了
+    if count <= top_k:
+        return collection.get()["documents"]
+
     query_embedding = embed_texts([question])[0]
-    results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=min(top_k, count),
+    )
     documents = results.get("documents", [[]])[0]
     return [doc for doc in documents if doc]
+
+
+def _retrieval_query(messages: list[dict]) -> str:
+    """
+    构造用于检索的 query。
+    追问里常有「它 / 这个 / 内容 / 全文」，拼接上一轮问题，检索更准。
+    """
+    current = messages[-1]["content"]
+    hints = ("它", "这个", "那份", "文档", "内容", "全文", "原文", "发给我", "输出", "给我")
+    if len(messages) >= 2 and any(h in current for h in hints):
+        prev_questions = [
+            m["content"] for m in messages[:-1] if m["role"] == "user"
+        ]
+        if prev_questions:
+            return f"{prev_questions[-1]} {current}"
+    return current
 
 
 def rag_chat(messages: list[dict], collection) -> str:
@@ -121,19 +148,26 @@ def rag_chat(messages: list[dict], collection) -> str:
     知识库问答：先检索相关片段，再让模型只根据这些片段回答。
     """
     question = messages[-1]["content"]
-    chunks = retrieve(collection, question)
+    search_query = _retrieval_query(messages)
+    chunks = retrieve(collection, search_query)
+
+    # 用户明确要「原文 / 全文」时，短文档直接给全部片段
+    want_full = any(k in question for k in ("全文", "原文", "输出", "发给我", "内容给我", "贴出来"))
+    if want_full and collection.count() <= 10:
+        chunks = collection.get()["documents"]
 
     if not chunks:
         context = "（未检索到相关内容）"
     else:
         context = "\n\n---\n\n".join(chunks)
 
-    system_prompt = f"""你是一个严格的文档问答助手。请只根据下面「参考资料」回答用户问题。
+    system_prompt = f"""你是一个文档问答助手。请只根据下面「参考资料」回答用户问题。
 
 规则：
 1. 只能使用参考资料中的信息，禁止编造。
-2. 如果参考资料里没有答案，必须回答：「根据已上传的文档，未找到相关信息。」
-3. 用简洁、准确的中文回答。
+2. 用户要求概括、引用、复述或输出文档内容时，可以直接基于参考资料作答。
+3. 只有参考资料里确实没有任何相关信息时，才回答：「根据已上传的文档，未找到相关信息。」
+4. 用简洁、准确的中文回答。
 
 参考资料：
 {context}"""
