@@ -99,7 +99,13 @@ def index_document(text: str, filename: str) -> tuple[object, int]:
 
     chromadb = _import_chromadb()
     client = chromadb.Client()
-    collection = client.create_collection(name=_collection_name(filename))
+    name = _collection_name(filename)
+    # 同一进程内重复上传同名文件时，先删旧 collection 再建新的
+    try:
+        client.delete_collection(name)
+    except Exception:
+        pass
+    collection = client.create_collection(name=name)
     collection.add(
         ids=[str(i) for i in range(len(chunks))],
         documents=chunks,

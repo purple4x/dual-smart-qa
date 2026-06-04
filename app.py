@@ -35,7 +35,11 @@ with st.sidebar:
     )
 
     if uploaded is not None:
-        if uploaded.name != st.session_state.document_name:
+        need_index = (
+            uploaded.name != st.session_state.document_name
+            or st.session_state.collection is None
+        )
+        if need_index:
             try:
                 with st.spinner("正在解析文档…"):
                     text = load_document(uploaded.name, uploaded.getvalue())
