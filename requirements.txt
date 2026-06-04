@@ -4,6 +4,7 @@ dashscope>=1.20.0
 python-dotenv>=1.0.0
 pypdf>=4.0.0
 python-docx>=1.1.0
-# Streamlit Cloud 上 chromadb 需固定版本，避免 protobuf 冲突
+# Streamlit Cloud 上 chromadb 需固定版本，避免 protobuf / numpy 冲突
 chromadb==0.4.24
 protobuf>=4.21.0,<5.0.0
+numpy>=1.24.0,<2.0.0
