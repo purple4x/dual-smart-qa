@@ -16,6 +16,8 @@ if "collection" not in st.session_state:
     st.session_state.collection = None
 if "chunk_count" not in st.session_state:
     st.session_state.chunk_count = 0
+if "last_reflection" not in st.session_state:
+    st.session_state.last_reflection = None
 
 has_document = st.session_state.document_text is not None
 
@@ -61,6 +63,15 @@ with st.sidebar:
         st.info(f"📄 {st.session_state.document_name}")
         st.metric("提取字符数", len(st.session_state.document_text))
         st.metric("知识库片段数", st.session_state.chunk_count)
+        if st.session_state.last_reflection:
+            r = st.session_state.last_reflection
+            with st.expander("Self-Reflection 自检（方案 A）"):
+                st.write(f"**通过：** {'是' if r.passed else '否'}")
+                st.write(f"**原因：** {r.reason}")
+                if r.corrected:
+                    st.write("**初稿已被修正**")
+                    with st.expander("查看初稿"):
+                        st.text(r.draft_answer)
         with st.expander("预览文档开头"):
             preview = st.session_state.document_text[:800]
             if len(st.session_state.document_text) > 800:
@@ -102,14 +113,19 @@ if prompt := st.chat_input("输入你的问题…"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("思考中…"):
+        with st.spinner("检索 → 生成 → 反思校验…"):
             try:
                 if has_document and st.session_state.collection is not None:
-                    from rag import rag_chat
+                    from rag import rag_chat_detailed
 
-                    reply = rag_chat(st.session_state.messages, st.session_state.collection)
+                    result = rag_chat_detailed(
+                        st.session_state.messages, st.session_state.collection
+                    )
+                    reply = result.answer
+                    st.session_state.last_reflection = result.reflection
                 else:
                     reply = chat(st.session_state.messages)
+                    st.session_state.last_reflection = None
             except Exception as e:
                 st.error(str(e))
                 st.session_state.messages.pop()
